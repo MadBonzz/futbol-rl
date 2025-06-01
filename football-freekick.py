@@ -33,22 +33,29 @@ ORANGE = (255, 165, 0)  # Color for the kicking player
 
 class Ball:
     def __init__(self, x, y, z):
-        # 2D properties
+        # Position
         self.start_x = x
         self.start_y = y
         self.start_z = z
         self.x = x
         self.y = y
         self.z = z
+        
+        # Velocity
         self.vx = 0
         self.vy = 0
         self.vz = 0
-        self.radius = 0.22 * PIXELS_PER_METER
-        self.in_motion = False
-        self.curve_force = 0
         
-        self.gravity = 0.5  # Gravity constant (applied to z-axis)
-        self.bounce_damping = 0.7  # Energy loss on bounce
+        # Physics constants
+        self.radius = 0.22 * PIXELS_PER_METER
+        self.gravity = 0.8  # Gravity affecting z-velocity
+        self.air_resistance = 0.99  # Air resistance factor (0.99 = 1% resistance)
+        self.bounce_damping = 0.6  # Energy loss on bounce
+        self.curve_strength = 0.03  # How much curve affects y-velocity
+        
+        # State
+        self.in_motion = False
+        self.curve_direction = 0  # -1 to 1, set by direction control
         
     def reset(self):
         self.x = self.start_x
@@ -58,111 +65,109 @@ class Ball:
         self.vy = 0
         self.vz = 0
         self.in_motion = False
-        self.curve_force = 0
+        self.curve_direction = 0
     
     def shoot(self, power, cursor_x, cursor_y):
-        # Calculate direction towards goal center
         goal_center_x = SCREEN_WIDTH // 2
         goal_center_y = 50  # Goal is at top
         
         # Base direction towards goal
         base_dx = goal_center_x - self.x
         base_dy = goal_center_y - self.y
+        base_distance = math.sqrt(base_dx**2 + base_dy**2)
         
-        # Normalize base direction
-        base_magnitude = math.sqrt(base_dx**2 + base_dy**2)
-        if base_magnitude > 0:
-            base_dx /= base_magnitude
-            base_dy /= base_magnitude
+        if base_distance > 0:
+            base_dx /= base_distance
+            base_dy /= base_distance
         
-        # Convert power (0-100) to velocity magnitude
-        velocity_magnitude = power * 1  # sed multiplier for better range
+        # Convert power to velocity magnitude (0-100 -> 0-20 pixels/frame)
+        velocity_magnitude = power * 0.5
         
-        # New 3D physics implementation
-        # cursor_y is negative when below center - this means hitting lower on the ball
-        # Lower cursor = higher shot in real physics
-        
-        # Maximum height factor for highest power + lowest hit
-        max_height_factor = 4.0 if power > 90 else 3.0
-        
-        # Base height factor calculation 
-        # Lower cursor = hitting ball lower = more upward force
-        # Range from 0.5 (top of ball) to max_height_factor (bottom of ball)
-        height_factor = max(0.5, min(max_height_factor, (cursor_y / 20.0) + 1.0))
-        
-        # Power impacts overall velocity
-        # XY velocity - Horizontal movement
-        self.vx = base_dx * velocity_magnitude
+        # Horizontal velocities (x and y on field)
+        # cursor_x affects both direction and curve
+        direction_factor = 1 + (cursor_x * 0.02)  # Small adjustment to direction
+        self.vx = base_dx * velocity_magnitude * direction_factor
         self.vy = base_dy * velocity_magnitude
         
-        # Z velocity - Initial upward velocity based on hitting position and power
-        # More power + lower hit point = higher initial velocity
-        self.vz = height_factor * (power / 40)
+        # Vertical velocity (z - height)
+        # cursor_y: negative values (hitting lower on ball) = higher shot
+        # Range: cursor_y from -30 to +30, we want vz from 0 to 15
+        vertical_angle = max(0, -cursor_y / 30.0)  # 0 to 1, where 1 is maximum height
+        self.vz = vertical_angle * 15 * (power / 100)  # Scale by power
         
-        # Set curve force based on horizontal cursor position (Magnus effect)
-        self.curve_force = cursor_x * 0.05
+        # Set curve direction for Magnus effect
+        self.curve_direction = cursor_x / 30.0  # Normalize to -1 to 1
         
         self.in_motion = True
-        print(f"Ball shot with power: {power}, height_factor: {height_factor:.2f}, curve: {self.curve_force:.2f}, vz: {self.vz:.2f}")
+        print(f"Shot: Power={power}, Angle={vertical_angle:.2f}, Curve={self.curve_direction:.2f}")
     
     def update(self):
-        if self.in_motion:
-            # Apply gravity to z-axis
-            self.vz -= self.gravity
+        if not self.in_motion:
+            return False
             
-            # Apply curve force (Magnus effect)
-            # The curve should be more pronounced when the ball is in the air
-            # and diminish as it gets closer to the ground
-            if self.z > 0:
-                self.vx += self.curve_force * (self.z / 50)  # Scale curve by height
+        # Apply gravity to vertical velocity
+        self.vz -= self.gravity
+        
+        # Apply air resistance to horizontal velocity
+        self.vx *= self.air_resistance
+        self.vy *= self.air_resistance  # Also apply to y velocity
+        
+        # Apply curve (Magnus effect) to y-velocity
+        # Curve is stronger when ball is higher and moving faster
+        if self.z > 0:
+            height_factor = min(1.0, self.z / 100)  # Stronger curve at height
+            speed_factor = abs(self.vx) / 10  # Stronger curve at higher speeds
+            curve_force = self.curve_direction * self.curve_strength * height_factor * speed_factor
+            self.vy += curve_force
+        
+        # Update positions based on velocities (projectile motion)
+        self.x += self.vx
+        self.y += self.vy
+        self.z += self.vz
+        
+        # Ground collision
+        if self.z <= 0 and self.vz < 0:
+            self.z = 0
+            self.vz = -self.vz * self.bounce_damping
             
-            # Update 3D position
-            self.x += self.vx
-            self.y += self.vy
-            self.z += self.vz
-            
-            # Check if ball hits the ground
-            if self.z <= 0 and self.vz < 0:
-                # Bounce with energy loss
-                self.z = 0
-                self.vz = -self.vz * self.bounce_damping
-                
-                # If almost stopped, stop completely
-                if abs(self.vz) < 0.5:
-                    self.vz = 0
-            
-            # Check boundaries - return True if out of bounds
-            if (self.x <= self.radius or 
-                self.x >= SCREEN_WIDTH - self.radius or 
-                self.y <= 0 or 
-                self.y >= SCREEN_HEIGHT - self.radius):
-                return True
-            
-            # Check if ball has stopped moving
-            if (abs(self.vx) < 0.5 and 
-                abs(self.vy) < 0.5 and 
-                abs(self.vz) < 0.5 and
-                self.z <= 0.1 and
-                self.y > SCREEN_HEIGHT - 50):
-                return True
+            # Stop bouncing if velocity is too small
+            if abs(self.vz) < 1.0:
+                self.vz = 0
+        
+        # Check if ball is out of bounds
+        if (self.x <= self.radius or 
+            self.x >= SCREEN_WIDTH - self.radius or 
+            self.y <= 0 or 
+            self.y >= SCREEN_HEIGHT - self.radius):
+            return True
+        
+        # Check if ball has stopped
+        if (abs(self.vx) < 0.1 and 
+            abs(self.vy) < 0.1 and 
+            abs(self.vz) < 0.1 and
+            self.z <= 0.1):
+            self.in_motion = False
+            return True
                 
         return False
     
     def draw(self, screen):
         # Draw shadow first (beneath the ball)
         shadow_radius = max(3, self.radius - int(self.z / 30))
-        shadow_color = (50, 50, 50)  # Dark gray
+        shadow_color = (50, 50, 50)
         pygame.draw.circle(screen, shadow_color, (int(self.x), int(self.y)), shadow_radius)
         
+        # Draw ball with height offset
         visual_radius = max(7, self.radius - int(self.z / 40))
-        pygame.draw.circle(screen, WHITE, (int(self.x), int(self.y - self.z/8)), visual_radius)
-        pygame.draw.circle(screen, BLACK, (int(self.x), int(self.y - self.z/8)), visual_radius, 2)
+        ball_screen_y = int(self.y - self.z / 8)  # Visual height offset
+        pygame.draw.circle(screen, WHITE, (int(self.x), ball_screen_y), visual_radius)
+        pygame.draw.circle(screen, BLACK, (int(self.x), ball_screen_y), visual_radius, 2)
 
 class KickingPlayer:
     def __init__(self, x, y):
         self.x = x
         self.y = y
-        self.radius = 15
+        self.radius = 12
         self.color = ORANGE
         self.animation_frame = 0
         self.is_kicking = False
@@ -267,7 +272,6 @@ class PowerBar:
         screen.blit(text, (self.x, self.y - 25))
 
 class DirectionControl:
-    # This class remains largely the same
     def __init__(self, x, y):
         self.x = x
         self.y = y
@@ -280,7 +284,6 @@ class DirectionControl:
         new_x = self.cursor_x + dx
         new_y = self.cursor_y + dy
         
-        # Keep cursor within ball
         distance = math.sqrt(new_x**2 + new_y**2)
         if distance <= self.ball_radius - self.cursor_radius:
             self.cursor_x = new_x
@@ -415,7 +418,7 @@ class Game:
     def check_collision_with_players(self):
         # Use 3D collision detection
         # Convert ball's z-coordinate from pixels to meters
-        ball_height_meters = self.ball.z
+        ball_height_meters = self.ball.z / PIXELS_PER_METER
         
         # Check collision with wall players
         for player in self.wall_players:
@@ -560,13 +563,14 @@ class Game:
                 text = self.font.render(instruction, True, BLACK)
                 self.screen.blit(text, (10, 50 + i * 25))
             
+            # Debug info
             if self.show_debug and self.ball.in_motion:
                 debug_text = [
                     f"Ball height: {self.ball.z/PIXELS_PER_METER:.2f}m",
                     f"X velocity: {self.ball.vx:.2f}",
                     f"Y velocity: {self.ball.vy:.2f}",
                     f"Z velocity: {self.ball.vz:.2f}",
-                    f"Curve force: {self.ball.curve_force:.2f}"
+                    f"Curve: {self.ball.curve_direction:.2f}"
                 ]
                 
                 for i, debug in enumerate(debug_text):
@@ -577,5 +581,6 @@ class Game:
             self.clock.tick(60)
         pygame.quit()
 
-game = Game()
-game.run()
+if __name__ == "__main__":
+    game = Game()
+    game.run()
