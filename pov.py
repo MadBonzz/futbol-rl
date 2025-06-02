@@ -287,7 +287,6 @@ class Ball:
         return False
     
     def get_trajectory_at_y(self, target_y):
-        """Get ball position when it reaches a specific y coordinate (corrected from x)"""
         for i in range(1, len(self.trajectory_points)):
             x1, y1, z1 = self.trajectory_points[i-1]
             x2, y2, z2 = self.trajectory_points[i]
