@@ -1,17 +1,19 @@
 import pygame
-import torch
 import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
 from freekick import Game
+from model import LamineYamal
 
-class DeepLearningAgent:
-    def __init__(self, input_shape=(3, 600, 800), num_actions=7):
+class HansiFlick:
+    def __init__(self, input_shape=(3, 600, 800), num_actions=7, epsilon = 1, epsilon_factor=0.995):
         self.input_shape = input_shape
         self.num_actions = num_actions
-        print(f"Initialized agent with input shape {input_shape} and {num_actions} possible actions")
+        self.model = LamineYamal(input_shape[0], input_shape[1], input_shape[2], num_actions)
         
     def predict(self, frame_tensor):
+        out = self.model(frame_tensor)
+        prob = np.random.random()
         return np.random.randint(0, self.num_actions)
         
     def process_frame(self, frame_tensor):
@@ -61,7 +63,7 @@ def run_game_with_ai(num_frames=100, save_frames=False, display_every=10):
     game = Game()
     
     # Create deep learning agent
-    agent = DeepLearningAgent()
+    agent = HansiFlick()
     
     # Store frames if needed
     all_frames = []
@@ -69,17 +71,14 @@ def run_game_with_ai(num_frames=100, save_frames=False, display_every=10):
     
     # Create screen to render game
     screen = pygame.display.set_mode((800, 600))
-    pygame.display.set_caption("Football Free Kick AI")
     
     # Process frames
     for i in range(num_frames):
-        # Process any pending pygame events to avoid freezing
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 return
         
-        # Render the current game state
         game.screen.fill((34, 139, 34))  # Fill with GREEN
         game.draw_field()
         game.draw_game_objects()
