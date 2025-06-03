@@ -3,39 +3,8 @@ import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
 from freekick import Game
-from model import LamineYamal
-import torch
-from torch.optim import Adam
-from torch import nn
+from trainer import HansiFlick
 
-class HansiFlick:
-    def __init__(self, input_shape=(3, 600, 800), num_actions=7, epsilon = 1, epsilon_factor=0.995, lr=1e-3, device='cuda'):
-        self.input_shape = input_shape
-        self.num_actions = num_actions
-        self.device = device
-        self.model = LamineYamal(input_shape[0], input_shape[1], input_shape[2], num_actions)
-        self.model = self.model.to(device)
-        self.lr = lr
-        self.optim = Adam(self.model.parameters(), lr=self.lr)
-        self.criterion = nn.MSELoss()
-        self.epsilon = epsilon
-        self.decay_factory = epsilon_factor
-        
-    def predict(self, frame_tensor):
-        prob = np.random.random()
-        self.epsilon *= self.decay_factory
-        if prob <= self.epsilon:
-            return np.random.randint(0, self.num_actions)
-        else:
-            frame_tensor = frame_tensor.to(self.device)
-            out = self.model(frame_tensor)
-            return torch.argmax(out).item()
-        
-        
-    def process_frame(self, frame_tensor):
-        if frame_tensor.max() > 1.0:
-            frame_tensor = frame_tensor / 255.0
-        return frame_tensor
 
 def display_tensor(tensor, title="Game Frame"):
     img = tensor.squeeze(0)  
@@ -62,6 +31,88 @@ def display_tensor(tensor, title="Game Frame"):
     plt.axis('off')  # Hide axes
     plt.title(title)
     plt.show()
+
+def train(trainer : HansiFlick, game : Game, n_episodes = 100, train_intervals=5):
+    if not pygame.get_init():
+        pygame.init()
+
+    agent = trainer
+
+    run_history = {
+        'state' : [],
+        'action' : [],
+        'reward' : [],
+        'next_state' : []
+    }
+
+    screen = pygame.display.set_mode((800, 600))
+
+    for i in range(n_episodes):
+        if (i+1) % train_intervals == 0:
+            agent.train_model(run_history)
+            run_history = {
+                            'state' : [],
+                            'action' : [],
+                            'reward' : [],
+                            'next_state' : []
+                        }
+        game.screen.fill((34, 139, 34))  # Fill with GREEN
+        game.draw_field()
+        game.draw_game_objects()
+        game.draw_ui()
+        pygame.display.flip()
+        current_episode = True
+
+        frame = game.get_frame_as_tensor()
+        processed_frame = agent.process_frame(frame)
+        while current_episode:
+            game.screen.fill((34, 139, 34))  # Fill with GREEN
+            game.draw_field()
+            game.draw_game_objects()
+            game.draw_ui()
+            pygame.display.flip()
+            run_history['state'].append(processed_frame)
+            action = agent.predict(processed_frame)
+            game.step(action)
+            reward = 0.001
+            print(reward)
+            ball_finished = False
+            if action == 6:
+                while not ball_finished:
+                    ball_finished = game.ball.update()
+                    game.kicking_player.update()
+                    game.goalkeeper.update()
+                    game.screen.fill((34, 139, 34))  # Fill with GREEN
+                    game.draw_field()
+                    game.draw_game_objects()
+                    game.draw_ui()
+                    pygame.display.flip()
+                    pygame.time.delay(100)
+                    if ball_finished and game.ball.trajectory_points:
+                        final_dist, _, goal = game.handle_shot_result()
+                        if goal:
+                            reward = 1
+                        else:
+                            reward = 1 / final_dist
+                        print(reward)
+                        run_history['action'].append(action)
+                        run_history['reward'].append(reward)
+                        run_history['next_state'].append(None)
+                        current_episode = False
+                        break
+            else:
+                ball_finished = game.ball.update()
+                game.kicking_player.update()
+                game.goalkeeper.update()
+                frame = game.get_frame_as_tensor()
+                processed_frame = agent.process_frame(frame)
+                run_history['action'].append(action)
+                run_history['reward'].append(reward)
+                run_history['next_state'].append(processed_frame)
+                pygame.time.delay(100)
+        game.setup_scenario()
+        agent.epsilon *= agent.decay_factory
+    pygame.quit()
 
 def run_game_with_ai(num_frames=100, save_frames=False, display_every=10):
     if not pygame.get_init():
@@ -113,15 +164,14 @@ def run_game_with_ai(num_frames=100, save_frames=False, display_every=10):
         
         # Update game state based on model's prediction
         game.step(action)
-        
-        # Update ball and other game objects
+        reward = -0.01
         ball_finished = game.ball.update()
         game.kicking_player.update()
         game.goalkeeper.update()
         
         # If the ball has finished its trajectory, set up a new scenario
         if ball_finished and game.ball.trajectory_points:
-            game.handle_shot_result()
+            wall_passed, goal = game.handle_shot_result()
             game.setup_scenario()
             
         # Add a small delay to make visualization possible
@@ -131,9 +181,11 @@ def run_game_with_ai(num_frames=100, save_frames=False, display_every=10):
     return all_frames, all_actions
 
 if __name__ == "__main__":
-    # Run the game with AI for 20 frames
-    print("\nRunning game with AI agent...")
-    frames, actions = run_game_with_ai(num_frames=200, display_every=5)
+    # print("\nRunning game with AI agent...")
+    # frames, actions = run_game_with_ai(num_frames=200, display_every=5)
     
-    print(f"Processed {len(frames)} frames with corresponding actions")
-    print("Game session complete")
+    # print(f"Processed {len(frames)} frames with corresponding actions")
+    # print("Game session complete")
+    game = Game()
+    trainer = HansiFlick()
+    train(trainer, game, 10000)

@@ -340,6 +340,14 @@ class Ball:
             return self.trajectory_points[-1][1]
         else:
             return self.y
+        
+    def get_final_x_position(self):
+        if self.final_position:
+            return self.final_position[0]
+        elif self.trajectory_points:
+            return self.trajectory_points[-1][0]
+        else:
+            return self.x
     
     def draw(self, screen):
         # Draw shadow
@@ -377,7 +385,11 @@ class EnhancedCollisionDetector:
         # Get key positions
         wall_y = wall_players[0].y if wall_players else None
         goal_y = 50
+        goal_left = (SCREEN_WIDTH - GOAL_WIDTH) // 2
+        goal_x = goal_left - (GOAL_WIDTH / 2)
         ball_final_y = ball.get_final_y_position()
+        ball_final_x = ball.get_final_x_position()
+        final_dist = np.sqrt(np.square(goal_x - ball_final_x) + (np.square(goal_y - ball_final_y)))
         
         print(f"Analysis - Ball final Y: {ball_final_y}, Wall Y: {wall_y}, Goal Y: {goal_y}")
         
@@ -430,7 +442,7 @@ class EnhancedCollisionDetector:
                         analysis_result = f"Goal miss: {goal_details}"
         
         print(f"Final analysis: wall_passed={wall_passed}, goal_scored={goal_scored}, result='{analysis_result}'")
-        return wall_passed, goal_scored, analysis_result
+        return final_dist, wall_passed, goal_scored, analysis_result
     
     @staticmethod
     def check_wall_collision(ball, wall_players):
@@ -668,7 +680,7 @@ class Game:
                 self.screen.blit(text, (10, 480 + i*18))
 
     def handle_shot_result(self):
-        wall_passed, goal_scored, analysis_result = self.collision_detector.comprehensive_analysis(
+        final_dist, wall_passed, goal_scored, analysis_result = self.collision_detector.comprehensive_analysis(
             self.ball, self.wall_players, self.goalkeeper
         )
         
@@ -678,6 +690,7 @@ class Game:
             self.score += 1
         
         self.last_result = analysis_result
+        return final_dist, wall_passed, goal_scored
 
     def step(self, action):
         if action == 0:
