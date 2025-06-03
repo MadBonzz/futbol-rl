@@ -44,6 +44,5 @@ class LamineYamal(nn.Module):
     def forward(self, x):
         out = self.conv5(self.conv4(self.conv3(self.conv2(self.conv1(x)))))
         flat = self.flatten(out)
-        print(flat.shape)
         final = self.linear4(self.linear3(self.linear2(self.linear1(flat))))
         return final

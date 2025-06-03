@@ -4,17 +4,33 @@ from PIL import Image
 import matplotlib.pyplot as plt
 from freekick import Game
 from model import LamineYamal
+import torch
+from torch.optim import Adam
+from torch import nn
 
 class HansiFlick:
-    def __init__(self, input_shape=(3, 600, 800), num_actions=7, epsilon = 1, epsilon_factor=0.995):
+    def __init__(self, input_shape=(3, 600, 800), num_actions=7, epsilon = 1, epsilon_factor=0.995, lr=1e-3, device='cuda'):
         self.input_shape = input_shape
         self.num_actions = num_actions
+        self.device = device
         self.model = LamineYamal(input_shape[0], input_shape[1], input_shape[2], num_actions)
+        self.model = self.model.to(device)
+        self.lr = lr
+        self.optim = Adam(self.model.parameters(), lr=self.lr)
+        self.criterion = nn.MSELoss()
+        self.epsilon = epsilon
+        self.decay_factory = epsilon_factor
         
     def predict(self, frame_tensor):
-        out = self.model(frame_tensor)
         prob = np.random.random()
-        return np.random.randint(0, self.num_actions)
+        self.epsilon *= self.decay_factory
+        if prob <= self.epsilon:
+            return np.random.randint(0, self.num_actions)
+        else:
+            frame_tensor = frame_tensor.to(self.device)
+            out = self.model(frame_tensor)
+            return torch.argmax(out).item()
+        
         
     def process_frame(self, frame_tensor):
         if frame_tensor.max() > 1.0:
@@ -22,19 +38,14 @@ class HansiFlick:
         return frame_tensor
 
 def display_tensor(tensor, title="Game Frame"):
-    img = tensor.squeeze(0)  # Shape becomes (3, H, W)
-    
-    # Convert to CPU and detach if it's on GPU or requires grad
+    img = tensor.squeeze(0)  
     if tensor.is_cuda or tensor.requires_grad:
         img = img.detach().cpu()
     
-    # Permute dimensions from (C, H, W) to (H, W, C) for matplotlib
     img = img.permute(1, 2, 0)  # Shape becomes (H, W, 3)
     
-    # Convert to numpy
     img_np = img.numpy()
     
-    # Normalize to [0, 1] if needed
     if img_np.max() > 1.0:
         img_np = img_np / 255.0
     
@@ -45,10 +56,7 @@ def display_tensor(tensor, title="Game Frame"):
     # Create image from uint8 array
     image = Image.fromarray(img_uint8)
     
-    # Save the image
     image.save('frame.png')
-    
-    # Display the image
     plt.figure(figsize=(12, 9))
     plt.imshow(img_np)
     plt.axis('off')  # Hide axes
@@ -93,8 +101,8 @@ def run_game_with_ai(num_frames=100, save_frames=False, display_every=10):
             all_frames.append(frame)
             
         # Display frame occasionally
-        if i % display_every == 0:
-            display_tensor(frame, f"Frame {i}")
+        # if i % display_every == 0:
+        #     display_tensor(frame, f"Frame {i}")
             
         # Process frame with deep learning model
         processed_frame = agent.process_frame(frame)
@@ -122,37 +130,10 @@ def run_game_with_ai(num_frames=100, save_frames=False, display_every=10):
     pygame.quit()
     return all_frames, all_actions
 
-def test_render_single_frame():
-    if not pygame.get_init():
-        pygame.init()
-        
-    # Create game instance
-    game = Game()
-    
-    # Render one frame
-    game.screen.fill((34, 139, 34))  # Fill with GREEN
-    game.draw_field()
-    game.draw_game_objects()
-    game.draw_ui()
-    pygame.display.flip()
-    
-    # Get frame as tensor and display it
-    frame = game.get_frame_as_tensor()
-    display_tensor(frame, "Test Frame")
-    
-    # Clean up
-    pygame.quit()
-    
-    return frame
-
 if __name__ == "__main__":
-    # Test rendering a single frame first
-    print("Testing single frame rendering...")
-    test_frame = test_render_single_frame()
-    
     # Run the game with AI for 20 frames
     print("\nRunning game with AI agent...")
-    frames, actions = run_game_with_ai(num_frames=20, display_every=5)
+    frames, actions = run_game_with_ai(num_frames=200, display_every=5)
     
     print(f"Processed {len(frames)} frames with corresponding actions")
     print("Game session complete")
