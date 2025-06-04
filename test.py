@@ -4,33 +4,7 @@ from PIL import Image
 import matplotlib.pyplot as plt
 from freekick import Game
 from trainer import HansiFlick
-
-
-def display_tensor(tensor, title="Game Frame"):
-    img = tensor.squeeze(0)  
-    if tensor.is_cuda or tensor.requires_grad:
-        img = img.detach().cpu()
-    
-    img = img.permute(1, 2, 0)  # Shape becomes (H, W, 3)
-    
-    img_np = img.numpy()
-    
-    if img_np.max() > 1.0:
-        img_np = img_np / 255.0
-    
-    # Ensure values are in valid range [0, 1]
-    img_np = np.clip(img_np, 0, 1)
-    img_uint8 = (img_np * 255).astype(np.uint8)
-    
-    # Create image from uint8 array
-    image = Image.fromarray(img_uint8)
-    
-    image.save('frame.png')
-    plt.figure(figsize=(12, 9))
-    plt.imshow(img_np)
-    plt.axis('off')  # Hide axes
-    plt.title(title)
-    plt.show()
+import torch
 
 def train(trainer : HansiFlick, game : Game, n_episodes = 100, train_intervals=5):
     if not pygame.get_init():
@@ -74,8 +48,7 @@ def train(trainer : HansiFlick, game : Game, n_episodes = 100, train_intervals=5
             run_history['state'].append(processed_frame)
             action = agent.predict(processed_frame)
             game.step(action)
-            reward = 0.001
-            print(reward)
+            reward = 0
             ball_finished = False
             if action == 6:
                 while not ball_finished:
@@ -113,6 +86,7 @@ def train(trainer : HansiFlick, game : Game, n_episodes = 100, train_intervals=5
         game.setup_scenario()
         agent.epsilon *= agent.decay_factory
     pygame.quit()
+    torch.save(trainer.model, 'final.pth')
 
 def run_game_with_ai(num_frames=100, save_frames=False, display_every=10):
     if not pygame.get_init():

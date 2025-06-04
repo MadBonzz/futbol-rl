@@ -139,10 +139,10 @@ class Goalkeeper:
 
 class PowerBar:
     def __init__(self, x, y):
-        self.x = x
-        self.y = y
-        self.width = 150
-        self.height = 15
+        self.x = x - 50
+        self.y = y - 25
+        self.width = 200
+        self.height = 25
         self.power = 50
         self.max_power = 100
     
@@ -155,7 +155,7 @@ class PowerBar:
     def draw(self, screen, font):
         pygame.draw.rect(screen, GRAY, (self.x, self.y, self.width, self.height))
         power_width = (self.power / self.max_power) * self.width
-        color = GREEN if self.power < 70 else YELLOW if self.power < 90 else RED
+        color = YELLOW if self.power < 70 else RED
         pygame.draw.rect(screen, color, (self.x, self.y, power_width, self.height))
         pygame.draw.rect(screen, BLACK, (self.x, self.y, self.width, self.height), 2)
         text = font.render(f"Power: {self.power}%", True, BLACK)
@@ -163,10 +163,10 @@ class PowerBar:
 
 class ElevationBar:
     def __init__(self, x, y):
-        self.x = x
-        self.y = y
-        self.width = 150
-        self.height = 15
+        self.x = x - 50
+        self.y = y - 20
+        self.width = 200
+        self.height = 25
         self.elevation = 25
         self.max_elevation = 100
     
@@ -186,7 +186,7 @@ class ElevationBar:
     def draw(self, screen, font):
         pygame.draw.rect(screen, GRAY, (self.x, self.y, self.width, self.height))
         elevation_width = (self.elevation / self.max_elevation) * self.width
-        color = GREEN if self.elevation < 60 else YELLOW if self.elevation < 80 else RED
+        color = YELLOW if self.elevation < 60 else RED
         pygame.draw.rect(screen, color, (self.x, self.y, elevation_width, self.height))
         pygame.draw.rect(screen, BLACK, (self.x, self.y, self.width, self.height), 2)
         text = font.render(f"Elevation: {self.elevation}%", True, BLACK)
@@ -194,10 +194,10 @@ class ElevationBar:
 
 class CurveBar:
     def __init__(self, x, y):
-        self.x = x
-        self.y = y
-        self.width = 150
-        self.height = 15
+        self.x = x - 50
+        self.y = y - 15
+        self.width = 200
+        self.height = 25
         self.curve = 50
         self.max_curve = 100
     
@@ -216,7 +216,7 @@ class CurveBar:
         pygame.draw.line(screen, BLACK, (center_x, self.y), (center_x, self.y + self.height), 2)
         indicator_x = self.x + (self.curve / 100.0) * self.width
         indicator_width = 8
-        color = BLUE if self.curve < 45 else GREEN if self.curve < 55 else RED
+        color = BLUE if self.curve < 45 else YELLOW if self.curve < 55 else RED
         pygame.draw.rect(screen, color, (indicator_x - indicator_width//2, self.y, indicator_width, self.height))
         pygame.draw.rect(screen, BLACK, (self.x, self.y, self.width, self.height), 2)
         curve_text = "Left" if self.curve < 45 else "Straight" if self.curve < 55 else "Right"
@@ -663,21 +663,7 @@ class Game:
         
         for i, line in enumerate(tutorial):
             text = self.font.render(line, True, BLACK)
-            self.screen.blit(text, (10, 350 + i*20))
-        
-        # Debug info
-        if self.show_debug:
-            debug_info = [
-                f"Ball: ({self.ball.x:.0f}, {self.ball.y:.0f})",
-                f"Speed: ({self.ball.vx:.1f}, {self.ball.vy:.1f}, {self.ball.vz:.1f})",
-                f"Wall: {self.ball.wall_distance/PIXELS_PER_METER:.1f}m",
-                f"Goal: {self.ball.goal_distance_y/PIXELS_PER_METER:.1f}m",
-                f"Events logged: {len(self.event_logger.event_log)}"
-            ]
-            
-            for i, info in enumerate(debug_info):
-                text = self.font.render(info, True, BLACK)
-                self.screen.blit(text, (10, 480 + i*18))
+            self.screen.blit(text, (10, 350 + i*20))    
 
     def handle_shot_result(self):
         final_dist, wall_passed, goal_scored, analysis_result = self.collision_detector.comprehensive_analysis(

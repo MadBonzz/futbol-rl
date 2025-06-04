@@ -14,7 +14,7 @@ class HansiFlick:
         self.eval_model.load_state_dict(self.model.state_dict())
         self.lr = lr
         self.optim = Adam(self.model.parameters(), lr=self.lr)
-        self.criterion = nn.MSELoss()
+        self.criterion = nn.L1Loss()
         self.epsilon = epsilon
         self.decay_factory = epsilon_factor
         
