@@ -7,7 +7,7 @@ import numpy as np
 import math
 
 class HansiFlick:
-    def __init__(self, input_shape=(3, 600, 800), num_actions=7, gamma=0.9, lr=1e-2, device='cuda'):
+    def __init__(self, input_shape=(3, 600, 800), num_actions=7, gamma=0.9, lr=1e-1, device='cuda'):
         self.input_shape = input_shape
         self.num_actions = num_actions
         self.device = device
@@ -30,13 +30,13 @@ class HansiFlick:
     def train_model(self, history):
         total_loss = 0
         steps = len(history['reward'])
-        # for i in range(steps):
-        #     for j in range(i+1, steps):
-        #         history['reward'][i] += math.pow(self.gamma, j - i) * history['reward'][j]
+        for i in range(steps):
+            for j in range(i+1, steps):
+                history['reward'][i] += math.pow(self.gamma, j - i) * history['reward'][j]
         for i in range(steps):
             self.optim.zero_grad()
             probs = self.predict(history['state'][i])
-            loss = -probs[0][history['action'][i]] * sum(history['reward'])
+            loss = -probs[0][history['action'][i]] * history['reward'][i]
             total_loss += loss.item()
             loss.backward()
             self.optim.step()

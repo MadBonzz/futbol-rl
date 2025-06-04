@@ -765,3 +765,6 @@ class Game:
             self.clock.tick(60)
         
         pygame.quit()
+
+game = Game()
+game.run()

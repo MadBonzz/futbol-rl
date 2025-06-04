@@ -40,7 +40,7 @@ def train(trainer : HansiFlick, game : Game, n_episodes = 100, train_intervals=5
             run_history['state'].append(processed_frame)
             run_history['action'].append(action)
             game.step(action)
-            reward = 0.001
+            reward = -.001
             ball_finished = False
             if action == 6:
                 while not ball_finished:
