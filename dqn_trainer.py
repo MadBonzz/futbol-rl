@@ -5,7 +5,7 @@ from torch import nn
 import numpy as np
 
 class HansiFlick:
-    def __init__(self, input_shape=(3, 600, 800), num_actions=7, epsilon = 1, epsilon_factor=0.995, lr=1e-2, device='cuda'):
+    def __init__(self, input_shape=(3, 600, 800), num_actions=7, epsilon = 1, epsilon_factor=0.995, gamma=0.9, lr=1e-2, device='cuda'):
         self.input_shape = input_shape
         self.num_actions = num_actions
         self.device = device
@@ -17,6 +17,7 @@ class HansiFlick:
         self.criterion = nn.L1Loss()
         self.epsilon = epsilon
         self.decay_factory = epsilon_factor
+        self.gamma = gamma
         
     def predict(self, frame_tensor):
         prob = np.random.random()
@@ -53,7 +54,7 @@ class HansiFlick:
             q_value = torch.max(out).to(self.device)
             target = history['reward'][idx]
             if history['next_state'][idx] is not None:
-                target += torch.max(self.get_target(history['next_state'][idx]))
+                target += self.gamma * torch.max(self.get_target(history['next_state'][idx]))
             target = torch.tensor(target, dtype=torch.float32).to(self.device)
             loss = self.criterion(q_value, target)
             total_loss += loss.item()
